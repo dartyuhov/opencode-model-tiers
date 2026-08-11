@@ -2,10 +2,40 @@
 
 OpenCode plugin for resolving named model tiers in project and global config.
 
-Agents with `model_tier` use the matching entry from `model-tiers.json`. Agents
-without `model_tier` keep their explicit model and variant settings. On startup,
-the plugin clears persisted TUI variants while preserving recent and favorite
-models.
+Use `tier:<NAME>` anywhere OpenCode accepts a model value:
+
+```jsonc
+{
+  "model": "tier:IMPLEMENTATION",
+  "small_model": "tier:SMALL",
+  "agent": {
+    "reviewer": {
+      "model": "tier:LIGHT"
+    }
+  }
+}
+```
+
+Agent Markdown frontmatter uses the same syntax:
+
+```yaml
+---
+model: tier:LIGHT
+---
+```
+
+The `tier:` prefix is case-insensitive. Tier names match registry keys exactly
+after trimming, so `tier:LIGHT` matches `LIGHT`, but `tier:light` does not.
+Direct model IDs remain supported and pass through unchanged:
+
+```yaml
+model: anthropic/claude-sonnet-4-5
+```
+
+When a tier does not exist, the plugin shows a TUI warning, removes that model
+override, and lets OpenCode choose its normal default. The old `model_tier`
+setting is not supported. On startup, the plugin also clears persisted TUI
+variants while preserving recent and favorite models.
 
 The plugin checks the project registry first:
 

@@ -30,6 +30,9 @@ function loadTiers() {
   const registryPath = existsSync(localRegistryPath)
     ? localRegistryPath
     : globalRegistryPath;
+
+  if (!existsSync(registryPath)) return null;
+
   const registry = JSON.parse(readFileSync(registryPath, "utf8"));
   if (!registry || typeof registry !== "object" || Array.isArray(registry)) {
     throw new Error("[model-tiers] Registry must contain a JSON object.");
@@ -37,11 +40,11 @@ function loadTiers() {
 
   const tiers = new Map();
   for (const [name, policy] of Object.entries(registry)) {
-    const normalizedName = name.trim().toLowerCase();
-    if (!normalizedName) {
+    const tierName = name.trim();
+    if (!tierName) {
       throw new Error("[model-tiers] Tier names cannot be empty.");
     }
-    if (tiers.has(normalizedName)) {
+    if (tiers.has(tierName)) {
       throw new Error(`[model-tiers] Duplicate tier name: ${name}`);
     }
     if (!policy || typeof policy !== "object" || typeof policy.model !== "string") {
@@ -51,25 +54,43 @@ function loadTiers() {
       throw new Error(`[model-tiers] Tier ${name} variant must be a string.`);
     }
 
-    tiers.set(normalizedName, policy);
+    tiers.set(tierName, policy);
   }
 
   return tiers;
 }
 
-function resolveAgents(config, tiers) {
-  for (const [agentName, agent] of Object.entries(config.agent ?? {})) {
+function getTierName(value) {
+  if (typeof value !== "string" || !/^tier:/i.test(value)) return null;
+  return value.slice("tier:".length).trim();
+}
+
+function resolveModel(config, field, tiers, invalidTiers) {
+  const tierName = getTierName(config[field]);
+  if (tierName === null) return;
+
+  const policy = tiers?.get(tierName);
+  if (!policy) {
+    delete config[field];
+    invalidTiers.push(tierName);
+    return;
+  }
+
+  config[field] = policy.model;
+}
+
+function resolveAgents(config, tiers, invalidTiers) {
+  for (const agent of Object.values(config.agent ?? {})) {
     if (!agent || agent.disable === true || agent.hidden === true) continue;
 
-    const declaredTier = agent.options?.model_tier ?? agent.model_tier;
-    if (typeof declaredTier !== "string" || !declaredTier.trim()) continue;
+    const tierName = getTierName(agent.model);
+    if (tierName === null) continue;
 
-    const policy = tiers.get(declaredTier.trim().toLowerCase());
+    const policy = tiers?.get(tierName);
     if (!policy) {
-      throw new Error(
-        `[model-tiers] Agent ${agentName} references unknown tier ${declaredTier}. ` +
-          `Available tiers: ${[...tiers.keys()].join(", ")}`,
-      );
+      delete agent.model;
+      invalidTiers.push(tierName);
+      continue;
     }
 
     agent.model = policy.model;
@@ -78,35 +99,39 @@ function resolveAgents(config, tiers) {
     } else {
       agent.variant = policy.variant;
     }
-
-    if (agent.options) delete agent.options.model_tier;
-    delete agent.model_tier;
   }
 }
 
-function resolveTopLevelModel(config, field, tiers) {
-  const value = config[field];
-  if (typeof value !== "string" || !value.startsWith("tier:")) return;
-
-  const declaredTier = value.slice("tier:".length).trim();
-  const policy = tiers.get(declaredTier.toLowerCase());
-  if (!policy) {
-    throw new Error(
-      `[model-tiers] ${field} references unknown tier ${declaredTier}. ` +
-        `Available tiers: ${[...tiers.keys()].join(", ")}`,
-    );
+function showInvalidTierWarnings(client, invalidTiers) {
+  for (const tierName of invalidTiers) {
+    setTimeout(() => {
+      try {
+        Promise.resolve(
+          client?.tui?.showToast?.({
+            body: {
+              message: `Model Tier: ${tierName} does not exist`,
+              variant: "warning",
+            },
+          }),
+        ).catch(() => {
+          // TUI notification is best effort; invalid values were already removed.
+        });
+      } catch {
+        // TUI notification is best effort; invalid values were already removed.
+      }
+    }, 0);
   }
-
-  config[field] = policy.model;
 }
 
-export default async function ModelTiersPlugin() {
+export default async function ModelTiersPlugin({ client } = {}) {
   return {
     config(config) {
       const tiers = loadTiers();
-      resolveTopLevelModel(config, "model", tiers);
-      resolveTopLevelModel(config, "small_model", tiers);
-      resolveAgents(config, tiers);
+      const invalidTiers = [];
+      resolveModel(config, "model", tiers, invalidTiers);
+      resolveModel(config, "small_model", tiers, invalidTiers);
+      resolveAgents(config, tiers, invalidTiers);
+      showInvalidTierWarnings(client, invalidTiers);
       resetPersistedVariants();
     },
   };
