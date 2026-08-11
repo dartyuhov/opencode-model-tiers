@@ -1,5 +1,41 @@
 {
   "name": "opencode-model-tiers",
-  "private": true,
-  "type": "module"
+  "version": "0.1.0",
+  "description": "OpenCode plugin for resolving named model tiers in project and global config.",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./server": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "check": "node --check index.js",
+    "test": "node --test",
+    "pack:check": "npm pack --dry-run --json"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "model",
+    "configuration"
+  ],
+  "author": "dartyuhov",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dartyuhov/opencode-model-tiers.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dartyuhov/opencode-model-tiers/issues"
+  },
+  "homepage": "https://github.com/dartyuhov/opencode-model-tiers#readme",
+  "publishConfig": {
+    "access": "public"
+  }
 }

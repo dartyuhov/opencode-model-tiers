@@ -1,13 +1,14 @@
 import { existsSync, readFileSync, writeFileSync, renameSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 const configDirectory = join(
-  process.env.XDG_CONFIG_HOME ?? join(process.env.HOME, ".config"),
+  process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"),
   "opencode",
 );
 const globalRegistryPath = join(configDirectory, "model-tiers.json");
 const modelStatePath = join(
-  process.env.XDG_STATE_HOME ?? join(process.env.HOME, ".local", "state"),
+  process.env.XDG_STATE_HOME ?? join(homedir(), ".local", "state"),
   "opencode",
   "model.json",
 );
