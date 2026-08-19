@@ -167,11 +167,20 @@ For local plugin development, use a generic file URL in OpenCode config:
 
 Releases publish automatically through GitHub Actions after every push to
 `main`. npm permits each package version only once, so increment `version` in
-`package.json` before each release push.
+`package.json` before each release push. Pushes with an already-published
+version pass checks and skip publishing.
 
-Before the first release, create an npm token with publish access for this
-package and add it to the repository as the `NPM_TOKEN` Actions secret. The
-workflow uses that secret only in the publish step.
+Publishing uses npm Trusted Publishing with GitHub Actions OIDC. Configure the
+trusted publisher for this package with these values:
+
+- GitHub user: `dartyuhov`
+- Repository: `opencode-model-tiers`
+- Workflow filename: `publish.yml`
+- Allowed action: `npm publish`
+
+The workflow needs no npm token secret. After confirming a successful OIDC
+publish, revoke any temporary `NPM_TOKEN` previously used for the first
+release.
 
 Push the version change to `main` to publish it. Don't run `npm publish`
 locally.

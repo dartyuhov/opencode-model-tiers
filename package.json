@@ -1,6 +1,6 @@
 {
   "name": "opencode-model-tiers",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "OpenCode plugin for resolving named model tiers in project and global config.",
   "type": "module",
   "main": "./index.js",
