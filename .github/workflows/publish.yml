@@ -2,12 +2,11 @@ name: Publish
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   publish:
@@ -22,9 +21,7 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run pack:check
-      - name: Check tag version
-        run: |
-          package_version="$(node -p "require('./package.json').version")"
-          tag_version="${GITHUB_REF_NAME#v}"
-          test "$tag_version" = "$package_version"
-      - run: npm publish --access public
+      - name: Publish package
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
