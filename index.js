@@ -1,64 +1,53 @@
-import { existsSync, readFileSync, writeFileSync, renameSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { configDirectory, modelStatePath } from "./lib/paths.js";
+import { readRegistry } from "./lib/registry.js";
 
-const configDirectory = join(
-  process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"),
-  "opencode",
-);
-const globalRegistryPath = join(configDirectory, "model-tiers.json");
-const modelStatePath = join(
-  process.env.XDG_STATE_HOME ?? join(homedir(), ".local", "state"),
-  "opencode",
-  "model.json",
-);
-
-function resetPersistedVariants() {
+function resetPersistedModels(env = process.env) {
+  const statePath = modelStatePath(env);
+  let tempPath;
   try {
-    const state = JSON.parse(readFileSync(modelStatePath, "utf8"));
-    if (!state || typeof state !== "object" || Array.isArray(state)) return;
+    const state = JSON.parse(readFileSync(statePath, "utf8"));
+    if (!state || typeof state !== "object" || Array.isArray(state)) {
+      return "state must contain a JSON object";
+    }
 
-    const tempPath = join(dirname(modelStatePath), `.model-${process.pid}.json`);
-    writeFileSync(tempPath, `${JSON.stringify({ ...state, variant: {} })}\n`, { mode: 0o600 });
-    renameSync(tempPath, modelStatePath);
-  } catch {
-    // State reset is best effort; model-tier resolution must still work.
+    tempPath = join(dirname(statePath), `.model-${process.pid}.json`);
+    const nextState = { ...state, variant: {} };
+    delete nextState.model;
+    writeFileSync(tempPath, `${JSON.stringify(nextState)}\n`, { mode: 0o600 });
+    renameSync(tempPath, statePath);
+    return null;
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    return error instanceof Error ? error.message : String(error);
+  } finally {
+    if (tempPath) {
+      try {
+        unlinkSync(tempPath);
+      } catch {
+        // Temporary-file cleanup is best effort.
+      }
+    }
   }
 }
 
-function loadTiers() {
+function loadRegistry(env = process.env) {
   const localRegistryPath = join(process.cwd(), ".opencode", "model-tiers.json");
+  const globalRegistryPath = join(configDirectory(env), "model-tiers.json");
   const registryPath = existsSync(localRegistryPath)
     ? localRegistryPath
     : globalRegistryPath;
 
   if (!existsSync(registryPath)) return null;
 
-  const registry = JSON.parse(readFileSync(registryPath, "utf8"));
-  if (!registry || typeof registry !== "object" || Array.isArray(registry)) {
-    throw new Error("[model-tiers] Registry must contain a JSON object.");
-  }
-
-  const tiers = new Map();
-  for (const [name, policy] of Object.entries(registry)) {
-    const tierName = name.trim();
-    if (!tierName) {
-      throw new Error("[model-tiers] Tier names cannot be empty.");
-    }
-    if (tiers.has(tierName)) {
-      throw new Error(`[model-tiers] Duplicate tier name: ${name}`);
-    }
-    if (!policy || typeof policy !== "object" || typeof policy.model !== "string") {
-      throw new Error(`[model-tiers] Tier ${name} must define a model.`);
-    }
-    if (policy.variant !== undefined && typeof policy.variant !== "string") {
-      throw new Error(`[model-tiers] Tier ${name} variant must be a string.`);
-    }
-
-    tiers.set(tierName, policy);
-  }
-
-  return tiers;
+  const registry = readRegistry(registryPath);
+  return {
+    ...registry,
+    tiers: new Map(
+      Object.entries(registry.tiers).map(([name, policy]) => [name.trim(), policy]),
+    ),
+  };
 }
 
 function getTierName(value) {
@@ -66,35 +55,33 @@ function getTierName(value) {
   return value.slice("tier:".length).trim();
 }
 
-function resolveModel(config, field, tiers, invalidTiers) {
-  const tierName = getTierName(config[field]);
-  if (tierName === null) return;
+function resolveTier(value, tiers) {
+  const tierName = getTierName(value);
+  if (tierName === null) return null;
+  return { tierName, policy: tiers?.get(tierName) };
+}
 
-  const policy = tiers?.get(tierName);
-  if (!policy) {
+function resolveModel(config, field, tiers, invalidTiers) {
+  const resolution = resolveTier(config[field], tiers);
+  if (!resolution) return undefined;
+
+  if (!resolution.policy) {
     delete config[field];
-    invalidTiers.push(tierName);
-    return;
+    invalidTiers.add(resolution.tierName);
+    return undefined;
   }
 
-  config[field] = policy.model;
+  config[field] = resolution.policy.model;
+  return resolution.policy;
 }
 
 function resolveAgents(config, tiers, invalidTiers) {
   for (const agent of Object.values(config.agent ?? {})) {
     if (!agent || agent.disable === true || agent.hidden === true) continue;
 
-    const tierName = getTierName(agent.model);
-    if (tierName === null) continue;
+    const policy = resolveModel(agent, "model", tiers, invalidTiers);
+    if (!policy) continue;
 
-    const policy = tiers?.get(tierName);
-    if (!policy) {
-      delete agent.model;
-      invalidTiers.push(tierName);
-      continue;
-    }
-
-    agent.model = policy.model;
     if (policy.variant === undefined) {
       delete agent.variant;
     } else {
@@ -124,16 +111,34 @@ function showInvalidTierWarnings(client, invalidTiers) {
   }
 }
 
+function showWarning(client, message) {
+  setTimeout(() => {
+    try {
+      Promise.resolve(
+        client?.tui?.showToast?.({ body: { message, variant: "warning" } }),
+      ).catch(() => {
+        // TUI notification is best effort.
+      });
+    } catch {
+      // TUI notification is best effort.
+    }
+  }, 0);
+}
+
 export default async function ModelTiersPlugin({ client } = {}) {
   return {
     config(config) {
-      const tiers = loadTiers();
-      const invalidTiers = [];
+      const registry = loadRegistry();
+      const tiers = registry?.tiers;
+      const invalidTiers = new Set();
       resolveModel(config, "model", tiers, invalidTiers);
       resolveModel(config, "small_model", tiers, invalidTiers);
       resolveAgents(config, tiers, invalidTiers);
       showInvalidTierWarnings(client, invalidTiers);
-      resetPersistedVariants();
+      if (registry?.options.resetModelsOnStart === true) {
+        const error = resetPersistedModels();
+        if (error) showWarning(client, `Model Tier: could not reset persisted models (${error})`);
+      }
     },
   };
 }

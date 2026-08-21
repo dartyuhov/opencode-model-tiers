@@ -1,29 +1,35 @@
 # opencode-model-tiers
 
-`opencode-model-tiers` is a dependency-free OpenCode plugin that resolves
-named model tiers in project and global configuration. This project is
-community-maintained and isn't affiliated with or endorsed by OpenCode.
-
-> [!NOTE]
-> Version `0.1.0` is experimental. Configuration behavior may change before
-> the first stable release.
+`opencode-model-tiers` is an OpenCode plugin that resolves named model tiers in
+project and global configuration. This project is community-maintained and
+isn't affiliated with or endorsed by OpenCode.
 
 ## Install
 
-Add the package to your OpenCode configuration. OpenCode installs and caches
-npm plugins automatically when it starts.
+To install and create a registry interactively, run:
+
+```bash
+npx opencode-model-tiers init
+```
+
+Or add the plugin to `opencode.json` manually:
 
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
   "plugin": [
-    "opencode-model-tiers@0.1.0"
+    "opencode-model-tiers"
   ]
 }
 ```
 
-Use an exact version in configuration for reproducible startup. Restart
-OpenCode after changing the plugin entry, registry, or model configuration.
+Start OpenCode:
+
+```bash
+opencode
+```
+
+OpenCode installs npm plugins automatically at startup.
 
 ## Configure tiers
 
@@ -31,11 +37,11 @@ Use `tier:<NAME>` anywhere OpenCode accepts a model value:
 
 ```jsonc
 {
-  "model": "tier:IMPLEMENTATION",
+  "model": "tier:PLAN",
   "small_model": "tier:SMALL",
   "agent": {
     "reviewer": {
-      "model": "tier:LIGHT"
+      "model": "tier:INVESTIGATION"
     }
   }
 }
@@ -45,23 +51,36 @@ Agent Markdown frontmatter uses the same syntax:
 
 ```yaml
 ---
-model: tier:LIGHT
+model: tier:INVESTIGATION
 ---
 ```
+
+## Registry
 
 Create a registry as `./.opencode/model-tiers.json` for one project:
 
 ```json
 {
-  "IMPLEMENTATION": {
-    "model": "anthropic/claude-sonnet-4-5",
-    "variant": "high"
+  "options": {
+    "resetModelsOnStart": false
   },
-  "LIGHT": {
-    "model": "anthropic/claude-haiku-4-5"
-  },
-  "SMALL": {
-    "model": "anthropic/claude-haiku-4-5"
+  "tiers": {
+    "PLAN": {
+      "model": "anthropic/claude-opus-4-1",
+      "variant": "high"
+    },
+    "BUILD": {
+      "model": "anthropic/claude-sonnet-4-5"
+    },
+    "INVESTIGATION": {
+      "model": "anthropic/claude-sonnet-4-5"
+    },
+    "SMALL": {
+      "model": "anthropic/claude-haiku-4-5"
+    },
+    "FREE": {
+      "model": "opencode/free"
+    }
   }
 }
 ```
@@ -72,6 +91,57 @@ For a global registry, use
 
 The project registry takes precedence when it exists. The plugin doesn't fall
 back to the global registry if an existing project registry is malformed.
+
+Existing flat registries remain supported for compatibility:
+
+```json
+{
+  "PLAN": {
+    "model": "anthropic/claude-opus-4-1"
+  }
+}
+```
+
+The initializer writes the envelope format and asks whether to enable
+`resetModelsOnStart`.
+
+## Options
+
+Registry options configure optional plugin behavior. Set
+`options.resetModelsOnStart` to `true` when you want the registry to restore
+the configured model after every OpenCode restart:
+
+```json
+{
+  "options": {
+    "resetModelsOnStart": true
+  },
+  "tiers": {
+    "PLAN": {
+      "model": "anthropic/claude-opus-4-1"
+    },
+    "BUILD": {
+      "model": "anthropic/claude-sonnet-4-5"
+    },
+    "INVESTIGATION": {
+      "model": "anthropic/claude-sonnet-4-5"
+    },
+    "SMALL": {
+      "model": "anthropic/claude-haiku-4-5"
+    },
+    "FREE": {
+      "model": "opencode/free"
+    }
+  }
+}
+```
+
+`resetModelsOnStart` defaults to `false`. When enabled, the plugin deletes the
+persisted `model` property, clears persisted `variant` values, and preserves
+other state in `$XDG_STATE_HOME/opencode/model.json`. When
+`XDG_STATE_HOME` is unset, it uses `~/.local/state/opencode/model.json`.
+
+The initializer asks for this option and writes either `true` or `false`.
 
 ## Behavior
 
@@ -92,30 +162,19 @@ The plugin applies these rules during OpenCode startup:
 Tier variants apply to agent configuration only. Top-level model fields use
 the tier's model ID and don't set a top-level variant.
 
-## Persisted variants
-
-At startup, the plugin best-effort clears persisted TUI variants in
-`$XDG_STATE_HOME/opencode/model.json`. When `XDG_STATE_HOME` is unset, it uses
-`~/.local/state/opencode/model.json`.
-
-The plugin preserves other state fields and replaces only the `variant` value
-with an empty object. Missing, malformed, or inaccessible state files don't
-prevent tier resolution.
+Missing, malformed, or inaccessible state files don't prevent tier resolution.
+The plugin shows a TUI warning when an enabled reset fails.
 
 ## Upgrade or remove
 
-To upgrade, replace the pinned version in OpenCode configuration:
-
-```jsonc
-"plugin": ["opencode-model-tiers@0.1.1"]
-```
-
-Restart OpenCode after the change. To remove the plugin, delete its entry from
-the `plugin` array and restart OpenCode.
+To upgrade, restart OpenCode after a newer package version is published. To
+remove the plugin, delete its entry from the `plugin` array and restart
+OpenCode.
 
 ## Troubleshooting
 
-Use these checks when a tier doesn't resolve or an old variant remains visible.
+Use these checks when a tier doesn't resolve or an old model selection remains
+visible.
 
 ### Tier isn't resolved
 
@@ -131,15 +190,15 @@ Check these conditions:
 The plugin removed the invalid model override. Add the tier to the active
 registry, or replace the value with a direct model ID, then restart OpenCode.
 
-### Old variant still appears
+### Old model or variant still appears
 
-The plugin clears persisted variants during startup. Restart OpenCode after
-changing the registry. If the state file is not writable, remove or edit the
-stale `variant` entry manually.
+Set `options.resetModelsOnStart` to `true`, then restart OpenCode after changing
+the registry. If the state file is not writable, use the TUI warning to locate
+the problem and remove or edit the stale `model` or `variant` entry manually.
 
 ## Local development
 
-The repository has no runtime dependencies. Run checks with Node.js:
+Run checks with Node.js:
 
 ```bash
 node --check index.js
@@ -149,9 +208,11 @@ npm publish --dry-run
 ```
 
 The test suite also runs under Bun because OpenCode executes npm plugins with
-Bun. The package allowlist publishes only `index.js`, `README.md`, `LICENSE`,
-and `CHANGELOG.md`; tests, workflows, local registries, and other repository
-files stay out of the npm tarball.
+Bun. The package publishes the plugin entry point, the `npx` initializer, their
+runtime modules, and package documentation. Tests, workflows, local registries,
+and other repository files stay out of the npm tarball. The initializer has no
+production dependencies, so OpenCode does not install an additional dependency
+when it loads the plugin.
 
 For local plugin development, use a generic file URL in OpenCode config:
 
