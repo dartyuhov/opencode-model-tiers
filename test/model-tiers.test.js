@@ -1415,7 +1415,7 @@ test("preserves persisted model state when reset is disabled", async (t) => {
 test("warns when enabled persisted model reset fails", async (t) => {
   const fixture = await createFixture();
   t.after(() => rm(fixture.root, { recursive: true, force: true }));
-  await writeFile(join(fixture.stateHome, "opencode", "model.json"), "not json");
+  await writeFile(join(fixture.stateHome, "opencode", "model.json"), "[]");
 
   const result = await runPlugin({
     fixture,
@@ -1428,7 +1428,7 @@ test("warns when enabled persisted model reset fails", async (t) => {
 
   assert.equal(result.config.model, "provider/plan");
   assert.deepEqual(result.toasts.map(({ body }) => body), [
-    { message: "Model Tier: could not reset persisted models (Unexpected token 'o', \"not json\" is not valid JSON)", variant: "warning" },
+    { message: "Model Tier: could not reset persisted models (state must contain a JSON object)", variant: "warning" },
   ]);
 });
 
