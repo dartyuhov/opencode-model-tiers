@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.4
+
+- Include `@inquirer/prompts` as a production dependency so the `npx` initializer
+  uses its interactive picker instead of the terminal fallback.
+
 ## 0.1.3
 
 - Support envelope registries with configurable persisted model reset.

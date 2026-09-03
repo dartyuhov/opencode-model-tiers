@@ -210,9 +210,9 @@ npm publish --dry-run
 The test suite also runs under Bun because OpenCode executes npm plugins with
 Bun. The package publishes the plugin entry point, the `npx` initializer, their
 runtime modules, and package documentation. Tests, workflows, local registries,
-and other repository files stay out of the npm tarball. The initializer has no
-production dependencies, so OpenCode does not install an additional dependency
-when it loads the plugin.
+and other repository files stay out of the npm tarball. The initializer uses
+`@inquirer/prompts` for its interactive picker, and npm installs it as a runtime
+dependency when the package is used through `npx`.
 
 For local plugin development, use a generic file URL in OpenCode config:
 

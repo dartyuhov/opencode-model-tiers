@@ -191,8 +191,11 @@ test("exports the plugin from the package root and server subpath", () => {
 test("publishes plugin and initializer entry points", async () => {
   const packageJson = JSON.parse(await readFile(join(repositoryRoot, "package.json"), "utf8"));
 
-  assert.equal(packageJson.bin["opencode-model-tiers"], "./cli.js");
-  assert.equal(packageJson.dependencies, undefined);
+  assert.equal(packageJson.bin["opencode-model-tiers"], "cli.js");
+  assert.deepEqual(packageJson.dependencies, {
+    "@inquirer/prompts": "^8.5.2",
+  });
+  assert.equal(packageJson.devDependencies, undefined);
   assert.deepEqual(packageJson.files, [
     "index.js",
     "cli.js",

@@ -1,13 +1,13 @@
 {
   "name": "opencode-model-tiers",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "OpenCode plugin for resolving named model tiers in project and global config.",
   "type": "module",
   "main": "./index.js",
   "bin": {
-    "opencode-model-tiers": "./cli.js"
+    "opencode-model-tiers": "cli.js"
   },
-  "devDependencies": {
+  "dependencies": {
     "@inquirer/prompts": "^8.5.2"
   },
   "exports": {
