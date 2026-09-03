@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5
+
+- Pin `@inquirer/prompts` to the Node.js 18-compatible 7.x release line to avoid
+  engine warnings on Node.js 22.12.
+
 ## 0.1.4
 
 - Include `@inquirer/prompts` as a production dependency so the `npx` initializer

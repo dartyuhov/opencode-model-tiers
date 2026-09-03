@@ -193,7 +193,7 @@ test("publishes plugin and initializer entry points", async () => {
 
   assert.equal(packageJson.bin["opencode-model-tiers"], "cli.js");
   assert.deepEqual(packageJson.dependencies, {
-    "@inquirer/prompts": "^8.5.2",
+    "@inquirer/prompts": "^7.10.1",
   });
   assert.equal(packageJson.devDependencies, undefined);
   assert.deepEqual(packageJson.files, [
