@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.6
+
+- Apply the same model migration flow during global initialization as during
+  project initialization.
+- Discover Markdown agents in both `agent/` and `agents/` directories.
+
 ## 0.1.5
 
 - Pin `@inquirer/prompts` to the Node.js 18-compatible 7.x release line to avoid

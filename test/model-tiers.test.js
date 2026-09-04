@@ -728,19 +728,26 @@ test("discovers only usable Markdown agent files in stable order", async (t) => 
   const fixture = await createFixture();
   t.after(() => rm(fixture.root, { recursive: true, force: true }));
   const agentsPath = join(fixture.project, ".opencode", "agents");
+  const singularAgentsPath = join(fixture.project, ".opencode", "agent");
   await mkdir(agentsPath);
+  await mkdir(singularAgentsPath);
   await writeFile(join(agentsPath, "zeta.md"), "---\nmodel: provider/z\n---\n");
+  await writeFile(join(singularAgentsPath, "context7.md"), "---\nmodel: provider/context7\n---\n");
   await writeFile(join(agentsPath, "alpha.md"), "---\nmodel: \n---\n");
   await writeFile(join(agentsPath, "broken.md"), "---\nmodel: provider/broken\n");
   await writeFile(join(agentsPath, "notes.txt"), "model: provider/ignored\n");
 
   assert.deepEqual(agentMarkdownFiles(join(fixture.project, ".opencode")), [
+    join(singularAgentsPath, "context7.md"),
     join(agentsPath, "alpha.md"),
     join(agentsPath, "broken.md"),
     join(agentsPath, "zeta.md"),
   ]);
   assert.deepEqual(collectMarkdownSelectors(agentMarkdownFiles(join(fixture.project, ".opencode")))
-    .map(({ filePath }) => filePath), [join(agentsPath, "zeta.md")]);
+    .map(({ filePath }) => filePath), [
+      join(singularAgentsPath, "context7.md"),
+      join(agentsPath, "zeta.md"),
+    ]);
 });
 
 test("config discovery validates root and agent structures", async (t) => {
@@ -987,6 +994,8 @@ test("global init does not modify project selectors", async (t) => {
     selects: {
       "Where should the registry be created?": "global",
       "How do you want to configure model tiers?": "standard",
+      'Agent "plan" has no model configured. What do you want to do?': undefined,
+      'Agent "build" has no model configured. What do you want to do?': undefined,
       "What do you want to do?": "apply",
     },
     searches: {
@@ -1020,6 +1029,72 @@ test("global init does not modify project selectors", async (t) => {
   );
 });
 
+test("global init migrates global config and Markdown agent selectors", async (t) => {
+  const fixture = await createFixture();
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const globalConfigPath = join(fixture.configHome, "opencode", "opencode.jsonc");
+  const globalAgentPath = join(fixture.configHome, "opencode", "agent", "context7.md");
+  await mkdir(join(fixture.configHome, "opencode", "agent"), { recursive: true });
+  await writeFile(globalConfigPath, `{
+  "model": "provider/current",
+  "small_model": "provider/small",
+  "agent": {
+    "build": { "model": "provider/build-current" },
+    "plan": { "model": "provider/plan-current" }
+  }
+}`);
+  await writeFile(globalAgentPath, "---\nmodel: provider/context7\n---\n# Context7\n");
+
+  const prompts = scriptedPrompts({
+    selects: {
+      "Where should the registry be created?": "global",
+      "How do you want to configure model tiers?": "standard",
+      "What do you want to assign as a default model?": "PLAN",
+      "What do you want to assign as a small model?": "BUILD",
+      'Agent "build" uses "provider/build-current". What do you want to do?': "BUILD",
+      'Agent "plan" uses "provider/plan-current". What do you want to do?': "PLAN",
+      'Agent "context7" uses "provider/context7". What do you want to do?': "PLAN",
+      "What do you want to do?": "apply",
+    },
+    searches: {
+      "Select model for PLAN tier:": "provider/plan",
+      "Select variant for PLAN tier:": "__default__",
+      "Select model for BUILD tier:": "provider/build",
+      "Select variant for BUILD tier:": "__default__",
+    },
+  });
+
+  await runInit({
+    cwd: fixture.project,
+    env: { ...process.env, XDG_CONFIG_HOME: fixture.configHome },
+    input: {},
+    output: silentOutput(),
+    prompts,
+    loadCatalog: fakeCatalog,
+  });
+
+  const globalConfig = parseJsonc(await readFile(globalConfigPath, "utf8"));
+  assert.equal(globalConfig.properties.find(({ key }) => key === "model").value.value, "tier:PLAN");
+  assert.equal(globalConfig.properties.find(({ key }) => key === "small_model").value.value, "tier:BUILD");
+  const agents = globalConfig.properties.find(({ key }) => key === "agent").value;
+  assert.deepEqual(agents.properties.map(({ key, value }) => ({
+    key,
+    model: value.properties.find(({ key: propertyKey }) => propertyKey === "model").value.value,
+  })), [
+    { key: "build", model: "tier:BUILD" },
+    { key: "plan", model: "tier:PLAN" },
+  ]);
+  assert.match(await readFile(globalAgentPath, "utf8"), /model: tier:PLAN/);
+  assert.deepEqual(JSON.parse(await readFile(join(fixture.configHome, "opencode", "model-tiers.json"))), {
+    options: { resetModelsOnStart: false },
+    tiers: {
+      PLAN: { model: "provider/plan" },
+      BUILD: { model: "provider/build" },
+    },
+  });
+  await assert.rejects(readFile(join(fixture.project, ".opencode", "model-tiers.json")));
+});
+
 test("initializer writes selected reset policy and preserves unknown options", async (t) => {
   const fixture = await createFixture();
   t.after(() => rm(fixture.root, { recursive: true, force: true }));
@@ -1034,6 +1109,8 @@ test("initializer writes selected reset policy and preserves unknown options", a
       "Where should the registry be created?": "global",
       "Reset selected model and variant when OpenCode starts?": false,
       "How do you want to configure model tiers?": "standard",
+      'Agent "plan" has no model configured. What do you want to do?': undefined,
+      'Agent "build" has no model configured. What do you want to do?': undefined,
       "What do you want to do?": "apply",
     },
     searches: {

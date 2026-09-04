@@ -92,6 +92,10 @@ For a global registry, use
 The project registry takes precedence when it exists. The plugin doesn't fall
 back to the global registry if an existing project registry is malformed.
 
+The initializer uses the same migration flow for both destinations. It updates
+the OpenCode config and agent files in the selected config directory; only the
+registry and config directory location changes.
+
 Existing flat registries remain supported for compatibility:
 
 ```json

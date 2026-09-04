@@ -205,15 +205,11 @@ async function runInitOnce({
   const registry = mergeRegistries(existingRegistry, newTiers, { resetModelsOnStart });
 
   const config = configSource(baseDirectory);
-  const configSelectors = destination === "project" && config.root
+  const configSelectors = config.root
     ? collectConfigSelectors(config.source, config.root)
     : [];
-  const standardAgentSelectors = destination === "project"
-    ? collectAgentSelectors(config.root, tierMode === "standard")
-    : [];
-  const markdownSelectors = destination === "project"
-    ? collectMarkdownSelectors(agentMarkdownFiles(baseDirectory))
-    : [];
+  const standardAgentSelectors = collectAgentSelectors(config.root, tierMode === "standard");
+  const markdownSelectors = collectMarkdownSelectors(agentMarkdownFiles(baseDirectory));
   const migrations = await chooseMigrations(
     [...configSelectors, ...standardAgentSelectors, ...markdownSelectors],
     registry.tiers,
